@@ -326,7 +326,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 		goto fail;
 	}
 
-	RPC_INFO("request code %x", hdr->code);
+	RPC_INFO("request code %x : %s", hdr->code, gps_rpc_to_s(hdr->code));
 	reply->code = hdr->code;
 	
 	char *buf = hdr->buffer;

@@ -363,7 +363,7 @@ static int gps_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 	}
 	
 	rc = 0;
-	RPC_INFO("rpc handler code %x", hdr->code);
+	RPC_INFO("rpc handler code %x : %s", hdr->code,	gps_rpc_to_s(hdr->code));
 	reply->code = hdr->code;
 	
 	char *buf = hdr->buffer;
