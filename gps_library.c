@@ -47,7 +47,6 @@
  * Global Library State
  *****************************************************************************/
 
-static int gps_initialized = 0;
 static int client_fd = -1;
 static pthread_mutex_t gps_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t gps_cond = PTHREAD_COND_INITIALIZER;
@@ -57,14 +56,14 @@ static AGpsCallbacks *aGpsCallbacks = NULL;
 static GpsCallbacks *gpsCallbacks = NULL;
 static GpsNiCallbacks *niCallbacks = NULL;
 
-//static pthread_t gps_rpc_thread;
 static rpc_t *gps_rpc = NULL;
 
 static pthread_t gps_rpc_thread;
-static pthread_t* gps_cb_thread = NULL;
-static pthread_t* ni_cb_thread = NULL;
-static pthread_t* agps_cb_thread = NULL;
-static pthread_t* xtra_cb_thread = NULL;
+
+static pthread_t gps_cb_thread;
+static pthread_t ni_cb_thread;
+static pthread_t agps_cb_thread;
+static pthread_t xtra_cb_thread;
 
 enum {
 	READ_END = 0,
@@ -204,6 +203,7 @@ fail:
 }
 
 static void agps_cb_thread_func(void* unused) {
+	LOG_ENTRY;
 	while (pipe_agps[0] >= 0) {
 		struct rpc_request_hdr_t hdr;
 		memset(&hdr, 0, sizeof(hdr));
@@ -233,9 +233,11 @@ static void agps_cb_thread_func(void* unused) {
 fail:
 		continue;
 	}
+	LOG_EXIT;
 }
 
 static void ni_cb_thread_func(void* unused) {
+	LOG_ENTRY;
 	while (pipe_ni[0] >= 0) {
 		struct rpc_request_hdr_t hdr;
 		memset(&hdr, 0, sizeof(hdr));
@@ -265,9 +267,11 @@ static void ni_cb_thread_func(void* unused) {
 fail:
 		continue;
 	}
+	LOG_EXIT;
 }
 
 static void xtra_cb_thread_func(void* unused) {
+	LOG_ENTRY;
 	while (pipe_xtra[0] >= 0) {
 		struct rpc_request_hdr_t hdr;
 		memset(&hdr, 0, sizeof(hdr));
@@ -294,57 +298,6 @@ static void xtra_cb_thread_func(void* unused) {
 fail:
 		continue;
 	}
-}
-
-static void close_pipes(void) {
-	CHECK_CLOSE(pipe_gps[READ_END]);
-	CHECK_CLOSE(pipe_gps[WRITE_END]);
-	CHECK_CLOSE(pipe_agps[READ_END]);
-	CHECK_CLOSE(pipe_agps[WRITE_END]);
-	CHECK_CLOSE(pipe_ni[READ_END]);
-	CHECK_CLOSE(pipe_ni[WRITE_END]);
-	CHECK_CLOSE(pipe_xtra[READ_END]);
-	CHECK_CLOSE(pipe_xtra[WRITE_END]);
-}
-
-static void gps_proxy_teardown(void) {
-	LOG_ENTRY;
-	if (gps_rpc) {
-		rpc_join(gps_rpc);
-		rpc_free(gps_rpc);
-		gps_rpc = NULL;
-	}
-
-	CHECK_CLOSE(client_fd);
-
-	if (gps_cb_thread) {
-		pthread_kill(*gps_cb_thread, SIGKILL);
-		gps_cb_thread = NULL;
-	}
-
-	if (ni_cb_thread) {
-		pthread_kill(*ni_cb_thread, SIGKILL);
-		ni_cb_thread = NULL;
-	}
-
-	if (agps_cb_thread) {
-		pthread_kill(*agps_cb_thread, SIGKILL);
-		agps_cb_thread = NULL;
-	}
-
-	if (xtra_cb_thread) {
-		pthread_kill(*xtra_cb_thread, SIGKILL);
-		xtra_cb_thread = NULL;
-	}
-
-	xtraCallbacks = NULL;
-	aGpsCallbacks = NULL;
-	gpsCallbacks = NULL;
-	niCallbacks = NULL;
-
-	close_pipes();
-
-	gps_initialized = 0;
 	LOG_EXIT;
 }
 
@@ -419,7 +372,7 @@ static int gps_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 		
 		case AGPS_CREATE_THREAD_CB:
 			if (aGpsCallbacks) {
-				*agps_cb_thread =
+				agps_cb_thread =
 					aGpsCallbacks->create_thread_cb("agps",
 					agps_cb_thread_func, NULL);
 			}
@@ -430,7 +383,7 @@ static int gps_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			break;
 		case NI_CREATE_THREAD_CB:
 			if (niCallbacks) {
-				niCallbacks->create_thread_cb("ni",
+				ni_cb_thread = niCallbacks->create_thread_cb("ni",
 					ni_cb_thread_func, NULL);
 			}
 			else {
@@ -440,7 +393,7 @@ static int gps_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			break;
 		case GPS_CREATE_THREAD_CB:
 			if (gpsCallbacks) {
-				gpsCallbacks->create_thread_cb("gps",
+				gps_cb_thread = gpsCallbacks->create_thread_cb("gps",
 					gps_cb_thread_func, NULL);
 			}
 			else {
@@ -450,7 +403,7 @@ static int gps_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			break;
 		case XTRA_CREATE_THREAD_CB:
 			if (xtraCallbacks) {
-				xtraCallbacks->create_thread_cb("xtra",
+				xtra_cb_thread = xtraCallbacks->create_thread_cb("xtra",
 					xtra_cb_thread_func, NULL);
 			}
 			else {
@@ -485,7 +438,7 @@ static int rpc_call_result(rpc_t *rpc, rpc_request_t *req)
 	}
 
 	rc = rpc_call(rpc, req);
-	if (rc) {
+	if (rc < 0) {
 		RPC_ERROR("rpc_call failed %d", rc);
 		goto fail;
 	}
@@ -501,6 +454,42 @@ fail:
 /******************************************************************************
  * RPC Transport Setup
  *****************************************************************************/
+static void close_pipes(void) {
+	CHECK_CLOSE(pipe_gps[READ_END]);
+	CHECK_CLOSE(pipe_gps[WRITE_END]);
+	CHECK_CLOSE(pipe_agps[READ_END]);
+	CHECK_CLOSE(pipe_agps[WRITE_END]);
+	CHECK_CLOSE(pipe_ni[READ_END]);
+	CHECK_CLOSE(pipe_ni[WRITE_END]);
+	CHECK_CLOSE(pipe_xtra[READ_END]);
+	CHECK_CLOSE(pipe_xtra[WRITE_END]);
+}
+
+static void gps_proxy_teardown(void) {
+	LOG_ENTRY;
+	if (gps_rpc) {
+		rpc_join(gps_rpc);
+		rpc_free(gps_rpc);
+		gps_rpc = NULL;
+	}
+
+	CHECK_CLOSE(client_fd);
+
+	pthread_kill(gps_cb_thread, SIGKILL);
+	pthread_kill(ni_cb_thread, SIGKILL);
+	pthread_kill(agps_cb_thread, SIGKILL);
+	pthread_kill(xtra_cb_thread, SIGKILL);
+
+	xtraCallbacks = NULL;
+	aGpsCallbacks = NULL;
+	gpsCallbacks = NULL;
+	niCallbacks = NULL;
+
+	close_pipes();
+
+	LOG_EXIT;
+}
+
 static int start_rpc(int fd) {
 	struct rpc *rpc = NULL;
 	
@@ -826,16 +815,8 @@ static int gps_init(GpsCallbacks *callbacks) {
 		},
 	};
 	
-	int rc = -1;
-	if (start_gps_client()) {
-		RPC_ERROR("failed to start rpc client thread");
-		goto fail;
-	}
-
-	RPC_DEBUG("initializing GPS");
-
 	LOG_ENTRY;
-	rc = rpc_call_result(gps_rpc, &req);
+	int rc = rpc_call_result(gps_rpc, &req);
 	LOG_EXIT;
 fail:
 	return rc;
@@ -876,7 +857,7 @@ static void gps_cleanup(void) {
 
 	LOG_ENTRY;
 	rpc_call(gps_rpc, &req);
-	gps_proxy_teardown();
+	//gps_proxy_teardown();
 	LOG_EXIT;
 }
 
@@ -980,7 +961,7 @@ fail:
 }
 
 static const void *gps_get_extension(const char *name) {
-	//RPC_DEBUG("%s:%s", __func__, name);
+	RPC_DEBUG("%s:%s", __func__, name);
 	if (!strcmp(name, GPS_XTRA_INTERFACE)) {
 		return &sGpsXtraInterface;
 	}
@@ -1028,6 +1009,11 @@ static int open_gps(const struct hw_module_t* module, char const* name,
 	dev->common.version = 0;
 	dev->common.module = (struct hw_module_t*)module;
 	dev->get_gps_interface = gps_get_hardware_interface;
+
+	if (start_gps_client()) {
+		RPC_ERROR("failed to start rpc gps client thread");
+		goto fail;
+	}
 	
 	*device = (struct hw_device_t*)dev;
 	LOG_EXIT;

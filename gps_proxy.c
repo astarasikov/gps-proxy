@@ -42,7 +42,7 @@
 
 static rpc_t *g_rpc = NULL;
 static void *lib_handle = NULL;
-static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 static GpsInterface *origGpsInterface;
 static GpsXtraInterface *origGpsXtraInterface;
 static AGpsInterface *origAGpsInterface;
@@ -51,6 +51,7 @@ static GpsNiInterface *origNiInterface;
 /******************************************************************************
  * Outgoing RPC Interface
  *****************************************************************************/
+
 static void gps_xtra_download_request_cb(void) {
 	LOG_ENTRY;
 
@@ -60,12 +61,12 @@ static void gps_xtra_download_request_cb(void) {
 		},
 	};
 	
-	rpc_call(g_rpc, &req);
-
+	rpc_call_noreply(g_rpc, &req);
+fail:
 	LOG_EXIT;
 }
 
-static pthread_t gps_create_thread_cb(
+static pthread_t create_thread_cb(
 	const char *name,
 	void (*start)(void *),
 	void *arg
@@ -96,9 +97,93 @@ fail:
 	return 0;
 }
 
+static pthread_t gps_create_thread_cb(
+	const char *name,
+	void (*start)(void *),
+	void *arg
+)
+{
+	LOG_ENTRY;
+	rpc_request_t req = {
+		.header = {
+			.code = GPS_CREATE_THREAD_CB,
+		},
+	};
+
+	rpc_call_noreply(g_rpc, &req);
+
+	pthread_t ret = create_thread_cb(name, start, arg);
+
+	LOG_EXIT;
+	return ret;
+}
+
+static pthread_t xtra_create_thread_cb(
+	const char *name,
+	void (*start)(void *),
+	void *arg
+)
+{
+	LOG_ENTRY;
+	rpc_request_t req = {
+		.header = {
+			.code =	XTRA_CREATE_THREAD_CB,
+		},
+	};
+
+	rpc_call_noreply(g_rpc, &req);
+
+	pthread_t ret = create_thread_cb(name, start, arg);
+
+	LOG_EXIT;
+	return ret;
+}
+
+static pthread_t ni_create_thread_cb(
+	const char *name,
+	void (*start)(void *),
+	void *arg
+)
+{
+	LOG_ENTRY;
+	rpc_request_t req = {
+		.header = {
+			.code = NI_CREATE_THREAD_CB,
+		},
+	};
+
+	rpc_call_noreply(g_rpc, &req);
+
+	pthread_t ret = create_thread_cb(name, start, arg);
+
+	LOG_EXIT;
+	return ret;
+}
+
+static pthread_t agps_create_thread_cb(
+	const char *name,
+	void (*start)(void *),
+	void *arg
+)
+{
+	LOG_ENTRY;
+	rpc_request_t req = {
+		.header = {
+			.code =	AGPS_CREATE_THREAD_CB,
+		},
+	};
+
+	rpc_call_noreply(g_rpc, &req);
+
+	pthread_t ret = create_thread_cb(name, start, arg);
+
+	LOG_EXIT;
+	return ret;
+}
+
 static GpsXtraCallbacks gpsXtraCallbacks = {
 	.download_request_cb = gps_xtra_download_request_cb,
-	.create_thread_cb = gps_create_thread_cb,
+	.create_thread_cb = xtra_create_thread_cb,
 };
 
 static void gps_ni_notify_cb(GpsNiNotification *notification) {
@@ -114,7 +199,7 @@ static void gps_ni_notify_cb(GpsNiNotification *notification) {
 	size_t idx = 0;
 
 	RPC_PACK_RAW(buf, idx, notification, sizeof(GpsNiNotification));
-	rpc_call(g_rpc, &req);
+	rpc_call_noreply(g_rpc, &req);
 
 fail:
 	LOG_EXIT;
@@ -122,7 +207,7 @@ fail:
 
 static GpsNiCallbacks gpsNiCallbacks = {
 	.notify_cb = gps_ni_notify_cb,
-	.create_thread_cb = gps_create_thread_cb,
+	.create_thread_cb = ni_create_thread_cb,
 };
 
 static void gps_location_cb(GpsLocation *location) {
@@ -138,7 +223,7 @@ static void gps_location_cb(GpsLocation *location) {
 	size_t idx = 0;
 
 	RPC_PACK_RAW(buf, idx, location, sizeof(GpsLocation));
-	rpc_call(g_rpc, &req);
+	rpc_call_noreply(g_rpc, &req);
 
 fail:
 	LOG_EXIT;
@@ -157,7 +242,7 @@ static void gps_status_cb(GpsStatus *status) {
 	size_t idx = 0;
 
 	RPC_PACK_RAW(buf, idx, status, sizeof(GpsStatus));
-	rpc_call(g_rpc, &req);
+	rpc_call_noreply(g_rpc, &req);
 
 fail:
 	LOG_EXIT;
@@ -176,7 +261,7 @@ static void gps_sv_status_cb(GpsSvStatus *sv_info) {
 	size_t idx = 0;
 
 	RPC_PACK_RAW(buf, idx, sv_info, sizeof(GpsSvStatus));
-	rpc_call(g_rpc, &req);
+	rpc_call_noreply(g_rpc, &req);
 
 fail:
 	LOG_EXIT;
@@ -202,7 +287,7 @@ static void gps_nmea_cb(GpsUtcTime timestamp,
 	RPC_PACK(buf, idx, timestamp);
 	RPC_PACK(buf, idx, length);
 	RPC_PACK_S(buf, idx, nmea);
-	rpc_call(g_rpc, &req);
+	rpc_call_noreply(g_rpc, &req);
 
 fail:
 	LOG_EXIT;
@@ -223,7 +308,7 @@ static void gps_set_capabilities_cb(uint32_t capabilities) {
 	RPC_INFO("%s: caps=%x", __func__, capabilities);
 
 	RPC_PACK(buf, idx, capabilities);
-	//rpc_call(g_rpc, &req);
+	rpc_call_noreply(g_rpc, &req);
 
 fail:
 	LOG_EXIT;
@@ -238,7 +323,7 @@ static void gps_acquire_wakelock_cb(void) {
 		},
 	};
 	
-	rpc_call(g_rpc, &req);
+	rpc_call_noreply(g_rpc, &req);
 
 fail:
 	LOG_EXIT;
@@ -253,7 +338,7 @@ static void gps_release_wakelock_cb(void) {
 		},
 	};
 	
-	rpc_call(g_rpc, &req);
+	rpc_call_noreply(g_rpc, &req);
 
 fail:
 	LOG_EXIT;
@@ -268,7 +353,7 @@ static void gps_request_utc_time_cb(void) {
 		},
 	};
 	
-	rpc_call(g_rpc, &req);
+	rpc_call_noreply(g_rpc, &req);
 
 fail:
 	LOG_EXIT;
@@ -300,7 +385,7 @@ static void gps_agps_status_cb(AGpsStatus *status) {
 	size_t idx = 0;
 
 	RPC_PACK_RAW(buf, idx, status, sizeof(AGpsStatus));
-	rpc_call(g_rpc, &req);
+	rpc_call_noreply(g_rpc, &req);
 
 fail:
 	LOG_EXIT;
@@ -308,7 +393,7 @@ fail:
 
 static AGpsCallbacks aGpsCallbacks = {
 	.status_cb = gps_agps_status_cb,
-	.create_thread_cb = gps_create_thread_cb,
+	.create_thread_cb = agps_create_thread_cb,
 };
 
 /******************************************************************************
@@ -326,7 +411,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 		goto fail;
 	}
 
-	RPC_INFO("request code %x : %s", hdr->code, gps_rpc_to_s(hdr->code));
+	RPC_INFO("+request code %x : %s", hdr->code, gps_rpc_to_s(hdr->code));
 	reply->code = hdr->code;
 	
 	char *buf = hdr->buffer;
@@ -583,11 +668,10 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			RPC_PACK(rbuf, idx, rc);
 			break;
 	}
+	RPC_INFO("-request code %x : %s", hdr->code, gps_rpc_to_s(hdr->code));
 	
-	//return rc;
 fail:
 	return 0;
-	return -1;
 }
 
 /******************************************************************************
@@ -693,11 +777,6 @@ fail:
 static int start_gps_server(void) {
 	int rc = -1;
 
-	if (pthread_mutex_init(&mutex, NULL)) {
-		RPC_ERROR("failed to initialize gps mutex");
-		goto fail;
-	}
-
 	if (gps_server()) {
 		RPC_ERROR("failed to handle GPS");
 		goto fail;
@@ -705,7 +784,6 @@ static int start_gps_server(void) {
 	
 	rc = 0;
 fail:
-	pthread_mutex_destroy(&mutex);
 	return rc;
 }
 
