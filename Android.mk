@@ -7,8 +7,7 @@ LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE := gps.proxy
-#$(TARGET_BOOTLOADER_BOARD_NAME)
+LOCAL_MODULE := gps.$(TARGET_BOOTLOADER_BOARD_NAME)
 
 LOCAL_SHARED_LIBRARIES:= \
 	libcutils \
