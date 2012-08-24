@@ -899,7 +899,7 @@ static int gps_server(void) {
 		goto fail;
 	}
 
-	while (1) {
+//	while (1) {
 		struct sockaddr_un client_addr;
 		int client_addr_len;
 
@@ -908,7 +908,8 @@ static int gps_server(void) {
 
 		if (client_fd <= 0) {
 			RPC_ERROR("failed to accept the client");
-			continue;
+			goto fail;
+			//continue;
 		}
 
 		if (handle_rpc(client_fd)) {
@@ -916,7 +917,7 @@ static int gps_server(void) {
 		}
 
 		close(client_fd);
-	}
+//	}
 
 	ret = 0;
 
