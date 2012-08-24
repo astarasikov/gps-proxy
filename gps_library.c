@@ -145,11 +145,8 @@ static void gps_cb_thread_func(void* unused) {
 
 				RPC_UNPACK(buf, idx, timestamp);
 				RPC_UNPACK(buf, idx, length);
-				RPC_UNPACK_S(buf, idx, nmea);
+				RPC_UNPACK_RAW(buf, idx, nmea, length);
 			
-				RPC_DEBUG("nmea: len %d, str %s\n",
-					length, nmea);
-
 				gpsCallbacks->nmea_cb(timestamp,
 					nmea, length);
 			}
@@ -162,7 +159,7 @@ static void gps_cb_thread_func(void* unused) {
 			if (gpsCallbacks) {
 				uint32_t caps = 0;
 				RPC_UNPACK(buf, idx, caps);
-				RPC_INFO("SET_CAPABILITIEST %x", caps);
+				RPC_DEBUG("SET_CAPABILITIEST %x", caps);
 				gpsCallbacks->set_capabilities_cb(caps);
 			}
 			else {
@@ -695,6 +692,11 @@ static int agps_data_conn_open(const char *apn) {
 	char *buf = req.header.buffer;
 	size_t idx = 0;
 
+	if (!apn) {
+		RPC_DEBUG("%s: apn is NULL", __func__);
+		goto fail;
+	}
+
 	RPC_PACK_S(buf, idx, apn);
 
 	rc = rpc_call_result(gps_rpc, &req);
@@ -741,6 +743,11 @@ static int agps_set_server(AGpsType type, const char *hostname, int port) {
 	int rc = -1;
 	char *buf = req.header.buffer;
 	size_t idx = 0;
+
+	if (!hostname) {
+		RPC_ERROR("%s: hostname is NULL", __func__);
+		goto fail;
+	}
 
 	RPC_PACK(buf, idx, type);
 	RPC_PACK(buf, idx, port);
@@ -1020,7 +1027,6 @@ static int open_gps(const struct hw_module_t* module, char const* name,
 	return 0;
 
 fail:
-	ALOGE("%s: failed", __FUNCTION__);
 	if (dev) {
 		free(dev);
 	}

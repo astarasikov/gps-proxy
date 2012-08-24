@@ -73,7 +73,7 @@ static pthread_t create_thread_cb(
 )
 {
 	LOG_ENTRY;
-	RPC_INFO("%s: name %s", __func__, name);
+	RPC_DEBUG("%s: name %s", __func__, name);
 	int rc = -1;
 	
 	if (!start) {
@@ -278,15 +278,12 @@ static void gps_nmea_cb(GpsUtcTime timestamp,
 		},
 	};
 	
-	RPC_DEBUG("nmea: len %d, str %s\n",
-		length, nmea);
-	
 	char *buf = req.header.buffer;
 	size_t idx = 0;
 
 	RPC_PACK(buf, idx, timestamp);
 	RPC_PACK(buf, idx, length);
-	RPC_PACK_S(buf, idx, nmea);
+	RPC_PACK_RAW(buf, idx, nmea, length);
 	rpc_call_noreply(g_rpc, &req);
 
 fail:
@@ -305,7 +302,7 @@ static void gps_set_capabilities_cb(uint32_t capabilities) {
 	char *buf = req.header.buffer;
 	size_t idx = 0;
 
-	RPC_INFO("%s: caps=%x", __func__, capabilities);
+	RPC_DEBUG("%s: caps=%x", __func__, capabilities);
 
 	RPC_PACK(buf, idx, capabilities);
 	rpc_call_noreply(g_rpc, &req);
@@ -411,7 +408,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 		goto fail;
 	}
 
-	RPC_INFO("+request code %x : %s", hdr->code, gps_rpc_to_s(hdr->code));
+	RPC_DEBUG("+request code %x : %s", hdr->code, gps_rpc_to_s(hdr->code));
 	reply->code = hdr->code;
 	
 	char *buf = hdr->buffer;
@@ -668,7 +665,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			RPC_PACK(rbuf, idx, rc);
 			break;
 	}
-	RPC_INFO("-request code %x : %s", hdr->code, gps_rpc_to_s(hdr->code));
+	RPC_DEBUG("-request code %x : %s", hdr->code, gps_rpc_to_s(hdr->code));
 	
 fail:
 	return 0;
