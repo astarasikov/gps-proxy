@@ -47,24 +47,11 @@ static GpsInterface *origGpsInterface;
 static GpsXtraInterface *origGpsXtraInterface;
 static AGpsInterface *origAGpsInterface;
 static GpsNiInterface *origNiInterface;
+static AGpsRilInterface *origRilInterface;
 
 /******************************************************************************
  * Outgoing RPC Interface
  *****************************************************************************/
-
-static void gps_xtra_download_request_cb(void) {
-	LOG_ENTRY;
-
-	rpc_request_t req = {
-		.header = {
-			.code = XTRA_REQUEST_CB,
-		},
-	};
-	
-	rpc_call_noreply(g_rpc, &req);
-fail:
-	LOG_EXIT;
-}
 
 static pthread_t create_thread_cb(
 	const char *name,
@@ -97,25 +84,21 @@ fail:
 	return 0;
 }
 
-static pthread_t gps_create_thread_cb(
-	const char *name,
-	void (*start)(void *),
-	void *arg
-)
-{
+/******************************************************************************
+ * XTRA Interface
+ *****************************************************************************/
+static void gps_xtra_download_request_cb(void) {
 	LOG_ENTRY;
+
 	rpc_request_t req = {
 		.header = {
-			.code = GPS_CREATE_THREAD_CB,
+			.code = XTRA_REQUEST_CB,
 		},
 	};
-
+	
 	rpc_call_noreply(g_rpc, &req);
-
-	pthread_t ret = create_thread_cb(name, start, arg);
-
+fail:
 	LOG_EXIT;
-	return ret;
 }
 
 static pthread_t xtra_create_thread_cb(
@@ -139,6 +122,15 @@ static pthread_t xtra_create_thread_cb(
 	return ret;
 }
 
+
+static GpsXtraCallbacks gpsXtraCallbacks = {
+	.download_request_cb = gps_xtra_download_request_cb,
+	.create_thread_cb = xtra_create_thread_cb,
+};
+
+/******************************************************************************
+ * NI Interface
+ *****************************************************************************/
 static pthread_t ni_create_thread_cb(
 	const char *name,
 	void (*start)(void *),
@@ -159,32 +151,6 @@ static pthread_t ni_create_thread_cb(
 	LOG_EXIT;
 	return ret;
 }
-
-static pthread_t agps_create_thread_cb(
-	const char *name,
-	void (*start)(void *),
-	void *arg
-)
-{
-	LOG_ENTRY;
-	rpc_request_t req = {
-		.header = {
-			.code =	AGPS_CREATE_THREAD_CB,
-		},
-	};
-
-	rpc_call_noreply(g_rpc, &req);
-
-	pthread_t ret = create_thread_cb(name, start, arg);
-
-	LOG_EXIT;
-	return ret;
-}
-
-static GpsXtraCallbacks gpsXtraCallbacks = {
-	.download_request_cb = gps_xtra_download_request_cb,
-	.create_thread_cb = xtra_create_thread_cb,
-};
 
 static void gps_ni_notify_cb(GpsNiNotification *notification) {
 	LOG_ENTRY;
@@ -209,6 +175,30 @@ static GpsNiCallbacks gpsNiCallbacks = {
 	.notify_cb = gps_ni_notify_cb,
 	.create_thread_cb = ni_create_thread_cb,
 };
+
+/******************************************************************************
+ * GPS Interface
+ *****************************************************************************/
+static pthread_t gps_create_thread_cb(
+	const char *name,
+	void (*start)(void *),
+	void *arg
+)
+{
+	LOG_ENTRY;
+	rpc_request_t req = {
+		.header = {
+			.code = GPS_CREATE_THREAD_CB,
+		},
+	};
+
+	rpc_call_noreply(g_rpc, &req);
+
+	pthread_t ret = create_thread_cb(name, start, arg);
+
+	LOG_EXIT;
+	return ret;
+}
 
 static void gps_location_cb(GpsLocation *location) {
 	LOG_ENTRY;
@@ -284,6 +274,7 @@ static void gps_nmea_cb(GpsUtcTime timestamp,
 	RPC_PACK(buf, idx, timestamp);
 	RPC_PACK(buf, idx, length);
 	RPC_PACK_RAW(buf, idx, nmea, length);
+	req.header.buffer[RPC_PAYLOAD_MAX - 1] = '\0';
 	rpc_call_noreply(g_rpc, &req);
 
 fail:
@@ -369,6 +360,30 @@ static GpsCallbacks gpsCallbacks = {
 	.request_utc_time_cb = gps_request_utc_time_cb,
 };
 
+/******************************************************************************
+ * AGPS Interface
+ *****************************************************************************/
+static pthread_t agps_create_thread_cb(
+	const char *name,
+	void (*start)(void *),
+	void *arg
+)
+{
+	LOG_ENTRY;
+	rpc_request_t req = {
+		.header = {
+			.code =	AGPS_CREATE_THREAD_CB,
+		},
+	};
+
+	rpc_call_noreply(g_rpc, &req);
+
+	pthread_t ret = create_thread_cb(name, start, arg);
+
+	LOG_EXIT;
+	return ret;
+}
+
 static void gps_agps_status_cb(AGpsStatus *status) {
 	LOG_ENTRY;
 
@@ -391,6 +406,72 @@ fail:
 static AGpsCallbacks aGpsCallbacks = {
 	.status_cb = gps_agps_status_cb,
 	.create_thread_cb = agps_create_thread_cb,
+};
+
+/******************************************************************************
+ * RIL Interface
+ *****************************************************************************/
+static pthread_t ril_create_thread_cb(
+	const char *name,
+	void (*start)(void *),
+	void *arg
+)
+{
+	LOG_ENTRY;
+	rpc_request_t req = {
+		.header = {
+			.code =	RIL_CREATE_THREAD_CB,
+		},
+	};
+
+	rpc_call_noreply(g_rpc, &req);
+
+	pthread_t ret = create_thread_cb(name, start, arg);
+
+	LOG_EXIT;
+	return ret;
+}
+
+static void ril_request_set_id(uint32_t flags) {
+	LOG_ENTRY;
+
+	rpc_request_t req = {
+		.header = {
+			.code = RIL_SET_ID_CB,
+		},
+	};
+	
+	char *buf = req.header.buffer;
+	size_t idx = 0;
+	
+	RPC_PACK(buf, idx, flags);
+	rpc_call_noreply(g_rpc, &req);
+fail:
+	LOG_EXIT;
+}
+
+static void ril_request_ref_loc(uint32_t flags) {
+	LOG_ENTRY;
+
+	rpc_request_t req = {
+		.header = {
+			.code = RIL_REF_LOC_CB,
+		},
+	};
+	
+	char *buf = req.header.buffer;
+	size_t idx = 0;
+	
+	RPC_PACK(buf, idx, flags);
+	rpc_call_noreply(g_rpc, &req);
+fail:
+	LOG_EXIT;
+}
+
+static AGpsRilCallbacks rilCallbacks = {
+	.create_thread_cb = ril_create_thread_cb,
+	.request_setid = ril_request_set_id,
+	request_refloc = ril_request_ref_loc,
 };
 
 /******************************************************************************
@@ -418,6 +499,86 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 	size_t ridx = 0;
 
 	switch (hdr->code) {
+		case RIL_INIT:
+			if (origRilInterface) {
+				origRilInterface->init(&rilCallbacks);
+			}
+			else {
+				RPC_ERROR("origRilInterface == NULL");
+				rc = -1;
+			}
+			break;
+		case RIL_SET_REF_LOC:
+			if (origRilInterface) {
+				AGpsRefLocation loc;
+				size_t sz_struct;
+				RPC_UNPACK(buf, idx, sz_struct);
+				RPC_UNPACK_RAW(buf, idx, &loc, sz_struct);
+				origRilInterface->set_ref_location(&loc, sz_struct);
+			}
+			else {
+				RPC_ERROR("origRilInterface == NULL");
+				rc = -1;
+			}
+			break;
+		case RIL_SET_SET_ID:
+			if (origRilInterface) {
+				AGpsSetIDType type;
+				char setid[RPC_PAYLOAD_MAX] = {};
+				RPC_UNPACK(buf, idx, type);
+				RPC_UNPACK_S(buf, idx, setid);
+				origRilInterface->set_set_id(type, setid);
+			}
+			else {
+				RPC_ERROR("origRilInterface == NULL");
+				rc = -1;
+			}
+			break;
+		case RIL_UPDATE_NET_STATE:
+			if (origRilInterface) {
+				int connected, type, roaming;
+				char extra[RPC_PAYLOAD_MAX] = {};
+
+				RPC_UNPACK(buf, idx, connected);
+				RPC_UNPACK(buf, idx, type);
+				RPC_UNPACK(buf, idx, roaming);
+				RPC_UNPACK_S(buf, idx, extra);
+
+				origRilInterface->update_network_state(connected, type, roaming,
+					extra);
+			}
+			else {
+				RPC_ERROR("origRilInterface == NULL");
+				rc = -1;
+			}
+		case RIL_NI_MSG:
+			break;
+			if (origRilInterface) {
+				uint8_t msg[RPC_PAYLOAD_MAX] = {};
+				size_t len;
+				RPC_UNPACK(buf, idx, len);
+				RPC_UNPACK_RAW(buf, idx, msg, len);
+				origRilInterface->ni_message(msg, len);
+			}
+			else {
+				RPC_ERROR("origRilInterface == NULL");
+				rc = -1;
+			}
+			break;
+		case RIL_UPDATE_NET_AVAILABILITY:
+			if (origRilInterface) {
+				char apn[RPC_PAYLOAD_MAX] = {};
+				int available;
+				RPC_UNPACK(buf, idx, available);
+				RPC_UNPACK_S(buf, idx, apn);
+				origRilInterface->update_network_availability(available, apn);
+			}
+			else {
+				RPC_ERROR("origRilInterface == NULL");
+				rc = -1;
+			}
+			break;
+
 		case GPS_PROXY_XTRA_INIT:
 			if (origGpsXtraInterface) {
 				rc = origGpsXtraInterface->init(&gpsXtraCallbacks);
@@ -854,6 +1015,8 @@ static int setup_gps_interface(void) {
 		origGpsInterface->get_extension(GPS_NI_INTERFACE);
 	origAGpsInterface =
 		origGpsInterface->get_extension(AGPS_INTERFACE);
+	origRilInterface =
+		origGpsInterface->get_extension(AGPS_RIL_INTERFACE);
 
 	return 0;
 
