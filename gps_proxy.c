@@ -471,7 +471,7 @@ fail:
 static AGpsRilCallbacks rilCallbacks = {
 	.create_thread_cb = ril_create_thread_cb,
 	.request_setid = ril_request_set_id,
-	request_refloc = ril_request_ref_loc,
+	.request_refloc = ril_request_ref_loc,
 };
 
 /******************************************************************************
