@@ -105,7 +105,7 @@ static void gps_cb_thread_func(void* unused) {
 
 		switch (hdr.code) {
 		case GPS_LOC_CB:
-			if (gpsCallbacks) {
+			if (gpsCallbacks && gpsCallbacks->location_cb) {
 				GpsLocation location;
 				memset(&location, 0, sizeof(location));
 				RPC_UNPACK(buf, idx, location);
@@ -117,7 +117,7 @@ static void gps_cb_thread_func(void* unused) {
 			break;
 
 		case GPS_STATUS_CB:
-			if (gpsCallbacks) {
+			if (gpsCallbacks && gpsCallbacks->status_cb) {
 				GpsStatus status;
 				memset(&status, 0, sizeof(status));
 				RPC_UNPACK(buf, idx, status);
@@ -129,7 +129,7 @@ static void gps_cb_thread_func(void* unused) {
 			break;
 
 		case GPS_SV_STATUS_CB:
-			if (gpsCallbacks) {
+			if (gpsCallbacks && gpsCallbacks->sv_status_cb) {
 				GpsSvStatus status;
 				memset(&status, 0, sizeof(status));
 				RPC_UNPACK(buf, idx, status);
@@ -141,7 +141,7 @@ static void gps_cb_thread_func(void* unused) {
 			break;
 
 		case GPS_NMEA_CB:
-			if (gpsCallbacks) {
+			if (gpsCallbacks && gpsCallbacks->nmea_cb) {
 				char nmea[RPC_PAYLOAD_MAX] = {};
 				GpsUtcTime timestamp;
 				int length;
@@ -159,7 +159,7 @@ static void gps_cb_thread_func(void* unused) {
 			break;
 
 		case GPS_SET_CAPABILITIES_CB:
-			if (gpsCallbacks) {
+			if (gpsCallbacks && gpsCallbacks->set_capabilities_cb) {
 				uint32_t caps = 0;
 				RPC_UNPACK(buf, idx, caps);
 				RPC_DEBUG("SET_CAPABILITIEST %x", caps);
@@ -171,7 +171,7 @@ static void gps_cb_thread_func(void* unused) {
 			break;
 
 		case GPS_ACQUIRE_LOCK_CB:
-			if (gpsCallbacks) {
+			if (gpsCallbacks && gpsCallbacks->acquire_wakelock_cb) {
 				gpsCallbacks->acquire_wakelock_cb();
 			}
 			else {
@@ -180,7 +180,7 @@ static void gps_cb_thread_func(void* unused) {
 			break;
 
 		case GPS_RELEASE_LOCK_CB:
-			if (gpsCallbacks) {
+			if (gpsCallbacks && gpsCallbacks->release_wakelock_cb) {
 				gpsCallbacks->release_wakelock_cb();
 			}
 			else {
@@ -189,7 +189,7 @@ static void gps_cb_thread_func(void* unused) {
 			break;
 
 		case GPS_REQUEST_UTC_TIME_CB:
-			if (gpsCallbacks) {
+			if (gpsCallbacks && gpsCallbacks->request_utc_time_cb) {
 				gpsCallbacks->request_utc_time_cb();
 			}
 			else {
@@ -219,7 +219,7 @@ static void agps_cb_thread_func(void* unused) {
 
 		switch (hdr.code) {
 		case AGPS_STATUS_CB:
-			if (aGpsCallbacks) {
+			if (aGpsCallbacks && aGpsCallbacks->status_cb) {
 				AGpsStatus status;
 				memset(&status, 0, sizeof(status));
 				RPC_UNPACK(buf, idx, status);
@@ -253,7 +253,7 @@ static void ni_cb_thread_func(void* unused) {
 
 		switch (hdr.code) {
 		case NI_NOTIFY_CB:
-			if (niCallbacks) {
+			if (niCallbacks && niCallbacks->notify_cb) {
 				GpsNiNotification nfy;
 				memset(&nfy, 0, sizeof(nfy));
 				RPC_UNPACK(buf, idx, nfy);
@@ -287,7 +287,7 @@ static void xtra_cb_thread_func(void* unused) {
 
 		switch (hdr.code) {
 		case XTRA_REQUEST_CB:
-			if (xtraCallbacks) {
+			if (xtraCallbacks && xtraCallbacks->download_request_cb) {
 				xtraCallbacks->download_request_cb();
 			}
 			else {
@@ -318,7 +318,7 @@ static void ril_cb_thread_func(void* unused) {
 
 		switch (hdr.code) {
 		case RIL_SET_ID_CB:
-			if (rilCallbacks) {
+			if (rilCallbacks && rilCallbacks->request_setid) {
 				uint32_t flags;
 				RPC_UNPACK(buf, idx, flags);
 				rilCallbacks->request_setid(flags);
@@ -329,7 +329,7 @@ static void ril_cb_thread_func(void* unused) {
 			break;
 
 		case RIL_REF_LOC_CB:
-			if (rilCallbacks) {
+			if (rilCallbacks && rilCallbacks->request_refloc) {
 				uint32_t flags;
 				RPC_UNPACK(buf, idx, flags);
 				rilCallbacks->request_refloc(flags);
@@ -426,7 +426,7 @@ static int gps_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			break;
 		
 		case AGPS_CREATE_THREAD_CB:
-			if (aGpsCallbacks) {
+			if (aGpsCallbacks && aGpsCallbacks->create_thread_cb) {
 				agps_cb_thread =
 					aGpsCallbacks->create_thread_cb("agps",
 					agps_cb_thread_func, NULL);
@@ -437,7 +437,7 @@ static int gps_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			}
 			break;
 		case NI_CREATE_THREAD_CB:
-			if (niCallbacks) {
+			if (niCallbacks && niCallbacks->create_thread_cb) {
 				ni_cb_thread = niCallbacks->create_thread_cb("ni",
 					ni_cb_thread_func, NULL);
 			}
@@ -447,7 +447,7 @@ static int gps_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			}
 			break;
 		case GPS_CREATE_THREAD_CB:
-			if (gpsCallbacks) {
+			if (gpsCallbacks && gpsCallbacks->create_thread_cb) {
 				gps_cb_thread = gpsCallbacks->create_thread_cb("gps",
 					gps_cb_thread_func, NULL);
 			}
@@ -457,7 +457,7 @@ static int gps_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			}
 			break;
 		case XTRA_CREATE_THREAD_CB:
-			if (xtraCallbacks) {
+			if (xtraCallbacks && xtraCallbacks->create_thread_cb) {
 				xtra_cb_thread = xtraCallbacks->create_thread_cb("xtra",
 					xtra_cb_thread_func, NULL);
 			}
@@ -467,7 +467,7 @@ static int gps_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			}
 			break;
 		case RIL_CREATE_THREAD_CB:
-			if (rilCallbacks) {
+			if (rilCallbacks && rilCallbacks->create_thread_cb) {
 				ril_cb_thread = rilCallbacks->create_thread_cb("ril",
 					ril_cb_thread_func, NULL);
 			}
@@ -698,6 +698,13 @@ done:
  *****************************************************************************/
 static int gps_xtra_init(GpsXtraCallbacks *callbacks) {
 	LOG_ENTRY;
+	
+	int rc = -1;
+	if (!callbacks) {
+		RPC_ERROR("%s: callbacks is NULL", __func__);
+		goto fail;
+	}
+	
 	xtraCallbacks = callbacks;
 	struct rpc_request_t req = {
 		.header = {
@@ -705,21 +712,28 @@ static int gps_xtra_init(GpsXtraCallbacks *callbacks) {
 		},
 	};
 	
-	int rc = rpc_call_result(gps_rpc, &req);
+	rc = rpc_call_result(gps_rpc, &req);
+
+fail:
 	LOG_EXIT;
 	return rc;
 }
 
 static int inject_xtra_data(char *data, int length) {
+	LOG_ENTRY;
+
+	int rc = -1;
 	struct rpc_request_t req = {
 		.header = {
 			.code = GPS_PROXY_XTRA_INJECT_XTRA_DATA,
 		},
 	};
 
-	LOG_ENTRY;
+	if (!data || !length) {
+		RPC_ERROR("%s: data is NULL", __func__);
+		goto fail;
+	}
 
-	int rc = -1;
 	char *buf = req.header.buffer;
 	size_t idx = 0;
 
@@ -745,6 +759,11 @@ static GpsXtraInterface sGpsXtraInterface = {
  * AGPS Interface
  *****************************************************************************/
 static void agps_init(AGpsCallbacks *callbacks) {
+	LOG_ENTRY;
+	if (!callbacks) {
+		RPC_ERROR("%s: callbacks is NULL", __func__);
+	}
+
 	aGpsCallbacks = callbacks;
 	struct rpc_request_t req = {
 		.header = {
@@ -752,7 +771,6 @@ static void agps_init(AGpsCallbacks *callbacks) {
 		},
 	};
 
-	LOG_ENTRY;
 	rpc_call(gps_rpc, &req);
 fail:
 	LOG_EXIT;
@@ -760,13 +778,13 @@ fail:
 }
 
 static int agps_data_conn_open(const char *apn) {
+	LOG_ENTRY;
 	struct rpc_request_t req = {
 		.header = {
 			.code = GPS_PROXY_AGPS_DATA_CONN_OPEN,
 		},
 	};
 
-	LOG_ENTRY;
 	int rc = -1;
 	char *buf = req.header.buffer;
 	size_t idx = 0;
@@ -787,40 +805,39 @@ fail:
 }
 
 static int agps_data_conn_closed(void) {
+	LOG_ENTRY;
 	struct rpc_request_t req = {
 		.header = {
 			.code = GPS_PROXY_AGPS_DATA_CONN_CLOSED,
 		},
 	};
 
-	LOG_ENTRY;
 	int rc = rpc_call_result(gps_rpc, &req);
 	LOG_EXIT;
 	return rc;
 }
 
 static int agps_data_conn_failed(void) {
+	LOG_ENTRY;
 	struct rpc_request_t req = {
 		.header = {
 			.code = GPS_PROXY_AGPS_DATA_CONN_FAILED,
 		},
 	};
 
-	LOG_ENTRY;
 	int rc = rpc_call_result(gps_rpc, &req);
 	LOG_EXIT;
 	return rc;
 }
 
 static int agps_set_server(AGpsType type, const char *hostname, int port) {
+	LOG_ENTRY;
 	struct rpc_request_t req = {
 		.header = {
 			.code = GPS_PROXY_AGPS_AGPS_SET_SERVER,
 		},
 	};
 	
-	LOG_ENTRY;
-
 	int rc = -1;
 	char *buf = req.header.buffer;
 	size_t idx = 0;
@@ -855,6 +872,12 @@ static AGpsInterface sAGpsInterface = {
  * NI Interface
  *****************************************************************************/
 static void ni_init(GpsNiCallbacks *callbacks) {
+	LOG_ENTRY;
+	if (!callbacks) {
+		RPC_ERROR("%s: callbacks is NULL", __func__);
+		goto fail;
+	}
+
 	niCallbacks = callbacks;
 	struct rpc_request_t req = {
 		.header = {
@@ -862,19 +885,18 @@ static void ni_init(GpsNiCallbacks *callbacks) {
 		},
 	};
 
-	LOG_ENTRY;
 	rpc_call(gps_rpc, &req);
+fail:
 	LOG_EXIT;
 }
 
 static void ni_respond(int notif_id, GpsUserResponseType user_response) {
+	LOG_ENTRY;
 	struct rpc_request_t req = {
 		.header = {
 			.code = GPS_PROXY_NI_RESPOND,
 		},
 	};
-
-	LOG_ENTRY;
 
 	char *buf = req.header.buffer;
 	size_t idx = 0;
@@ -899,6 +921,12 @@ static const GpsNiInterface sGpsNiInterface = {
  *****************************************************************************/
 static void ril_init(AGpsRilCallbacks *callbacks) {
 	LOG_ENTRY;
+
+	if (!callbacks) {
+		RPC_ERROR("%s: callbacks is NULL", __func__);
+		goto fail;
+	}
+
 	rilCallbacks = callbacks;
 	struct rpc_request_t req = {
 		.header = {
@@ -907,6 +935,7 @@ static void ril_init(AGpsRilCallbacks *callbacks) {
 	};
 
 	rpc_call(gps_rpc, &req);
+fail:
 	LOG_EXIT;
 }
 
@@ -914,6 +943,12 @@ static void ril_set_ref_location(const AGpsRefLocation *agps_reflocation,
 	size_t sz_struct)
 {
 	LOG_ENTRY;
+
+	if (!agps_reflocation || !sz_struct) {
+		RPC_ERROR("%s: agps_reflocation is NULL", __func__);
+		goto fail;
+	}
+
 	struct rpc_request_t req = {
 		.header = {
 			.code = RIL_SET_REF_LOC,
@@ -934,6 +969,12 @@ fail:
 
 static void ril_set_set_id(AGpsSetIDType type, const char *setid) {
 	LOG_ENTRY;
+	
+	if (!setid) {
+		RPC_ERROR("%s: setid is NULL", __func__);
+		goto fail;
+	}
+
 	struct rpc_request_t req = {
 		.header = {
 			.code = RIL_SET_SET_ID,
@@ -955,6 +996,12 @@ fail:
 
 static void ril_ni_message(uint8_t *msg, size_t len) {
 	LOG_ENTRY;
+	
+	if (!msg || !len) {
+		RPC_ERROR("%s: msg is NULL", __func__);
+		goto fail;
+	}
+
 	struct rpc_request_t req = {
 		.header = {
 			.code = RIL_NI_MSG,
@@ -978,6 +1025,12 @@ static void ril_update_network_state(int connected, int type, int roaming,
 	const char *extra_info)
 {
 	LOG_ENTRY;
+
+	if (!extra_info) {
+		RPC_ERROR("%s: extra_info is NULL", __func__);
+		goto fail;
+	}
+
 	struct rpc_request_t req = {
 		.header = {
 			.code = RIL_UPDATE_NET_STATE,
@@ -1001,6 +1054,12 @@ fail:
 
 static void ril_update_network_availability(int available, const char *apn) {
 	LOG_ENTRY;
+
+	if (!apn) {
+		RPC_ERROR("%s: apn is NULL", __func__);
+		goto fail;
+	}
+
 	struct rpc_request_t req = {
 		.header = {
 			.code = RIL_UPDATE_NET_AVAILABILITY,
@@ -1034,6 +1093,14 @@ static AGpsRilInterface sRilInterface = {
  * GPS Interface
  *****************************************************************************/
 static int gps_init(GpsCallbacks *callbacks) {
+	LOG_ENTRY;
+	
+	int rc = -1;
+	if (!callbacks) {
+		RPC_ERROR("%s: callbacks is NULL", __func__);
+		goto fail;
+	}
+
 	gpsCallbacks = callbacks;
 	struct rpc_request_t req = {
 		.header = {
@@ -1041,8 +1108,7 @@ static int gps_init(GpsCallbacks *callbacks) {
 		},
 	};
 	
-	LOG_ENTRY;
-	int rc = rpc_call_result(gps_rpc, &req);
+	rc = rpc_call_result(gps_rpc, &req);
 	LOG_EXIT;
 fail:
 	return rc;
@@ -1187,6 +1253,11 @@ fail:
 }
 
 static const void *gps_get_extension(const char *name) {
+	if (!name) {
+		RPC_ERROR("%s: name is NULL", __func__);
+		return NULL;
+	}
+
 	RPC_DEBUG("%s:%s", __func__, name);
 	if (!strcmp(name, GPS_XTRA_INTERFACE)) {
 		return &sGpsXtraInterface;

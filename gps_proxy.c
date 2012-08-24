@@ -43,11 +43,11 @@
 static rpc_t *g_rpc = NULL;
 static void *lib_handle = NULL;
 
-static GpsInterface *origGpsInterface;
-static GpsXtraInterface *origGpsXtraInterface;
-static AGpsInterface *origAGpsInterface;
-static GpsNiInterface *origNiInterface;
-static AGpsRilInterface *origRilInterface;
+static GpsInterface *origGpsInterface = NULL;
+static GpsXtraInterface *origGpsXtraInterface = NULL;
+static AGpsInterface *origAGpsInterface = NULL;
+static GpsNiInterface *origNiInterface = NULL;
+static AGpsRilInterface *origRilInterface = NULL;
 
 /******************************************************************************
  * Outgoing RPC Interface
@@ -160,6 +160,11 @@ static void gps_ni_notify_cb(GpsNiNotification *notification) {
 			.code = NI_NOTIFY_CB,
 		},
 	};
+
+	if (!notification) {
+		RPC_ERROR("%s: notification is NULL", __func__);
+		goto fail;
+	}
 	
 	char *buf = req.header.buffer;
 	size_t idx = 0;
@@ -208,6 +213,11 @@ static void gps_location_cb(GpsLocation *location) {
 			.code = GPS_LOC_CB,
 		},
 	};
+
+	if (!location) {
+		RPC_ERROR("%s: location is NULL", __func__);
+		goto fail;
+	}
 	
 	char *buf = req.header.buffer;
 	size_t idx = 0;
@@ -227,6 +237,11 @@ static void gps_status_cb(GpsStatus *status) {
 			.code = GPS_STATUS_CB,
 		},
 	};
+
+	if (!status) {
+		RPC_ERROR("%s: status is NULL", __func__);
+		goto fail;
+	}
 	
 	char *buf = req.header.buffer;
 	size_t idx = 0;
@@ -246,6 +261,11 @@ static void gps_sv_status_cb(GpsSvStatus *sv_info) {
 			.code = GPS_SV_STATUS_CB,
 		},
 	};
+
+	if (!sv_info) {
+		RPC_ERROR("%s: sv_info is NULL", __func__);
+		goto fail;
+	}
 	
 	char *buf = req.header.buffer;
 	size_t idx = 0;
@@ -267,6 +287,11 @@ static void gps_nmea_cb(GpsUtcTime timestamp,
 			.code = GPS_NMEA_CB,
 		},
 	};
+
+	if (!nmea || !length) {
+		RPC_ERROR("%s: nmea is NULL", __func__);
+		goto fail;
+	}
 	
 	char *buf = req.header.buffer;
 	size_t idx = 0;
@@ -392,6 +417,11 @@ static void gps_agps_status_cb(AGpsStatus *status) {
 			.code = AGPS_STATUS_CB,
 		},
 	};
+
+	if (!status) {
+		RPC_ERROR("%s: status is NULL", __func__);
+		goto fail;
+	}
 	
 	char *buf = req.header.buffer;
 	size_t idx = 0;
@@ -500,7 +530,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 
 	switch (hdr->code) {
 		case RIL_INIT:
-			if (origRilInterface) {
+			if (origRilInterface && origRilInterface->init) {
 				origRilInterface->init(&rilCallbacks);
 			}
 			else {
@@ -509,7 +539,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			}
 			break;
 		case RIL_SET_REF_LOC:
-			if (origRilInterface) {
+			if (origRilInterface && origRilInterface->set_ref_location) {
 				AGpsRefLocation loc;
 				size_t sz_struct;
 				RPC_UNPACK(buf, idx, sz_struct);
@@ -522,7 +552,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			}
 			break;
 		case RIL_SET_SET_ID:
-			if (origRilInterface) {
+			if (origRilInterface && origRilInterface->set_set_id) {
 				AGpsSetIDType type;
 				char setid[RPC_PAYLOAD_MAX] = {};
 				RPC_UNPACK(buf, idx, type);
@@ -535,7 +565,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			}
 			break;
 		case RIL_UPDATE_NET_STATE:
-			if (origRilInterface) {
+			if (origRilInterface && origRilInterface->update_network_state) {
 				int connected, type, roaming;
 				char extra[RPC_PAYLOAD_MAX] = {};
 
@@ -553,7 +583,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			}
 		case RIL_NI_MSG:
 			break;
-			if (origRilInterface) {
+			if (origRilInterface && origRilInterface->ni_message) {
 				uint8_t msg[RPC_PAYLOAD_MAX] = {};
 				size_t len;
 				RPC_UNPACK(buf, idx, len);
@@ -566,7 +596,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			}
 			break;
 		case RIL_UPDATE_NET_AVAILABILITY:
-			if (origRilInterface) {
+			if (origRilInterface && origRilInterface->update_network_availability) {
 				char apn[RPC_PAYLOAD_MAX] = {};
 				int available;
 				RPC_UNPACK(buf, idx, available);
@@ -580,7 +610,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			break;
 
 		case GPS_PROXY_XTRA_INIT:
-			if (origGpsXtraInterface) {
+			if (origGpsXtraInterface && origGpsXtraInterface->init) {
 				rc = origGpsXtraInterface->init(&gpsXtraCallbacks);
 			}
 			else {
@@ -597,7 +627,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 				RPC_UNPACK(buf, idx, length);
 				RPC_UNPACK_RAW(buf, idx, data, length);
 				
-				if (origGpsXtraInterface) {
+				if (origGpsXtraInterface && origGpsXtraInterface->inject_xtra_data) {
 					rc = origGpsXtraInterface->inject_xtra_data(data, length);
 				}
 				else {
@@ -608,7 +638,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			RPC_PACK(rbuf, ridx, rc);
 			break;
 		case GPS_PROXY_AGPS_INIT:
-			if (origAGpsInterface) {
+			if (origAGpsInterface && origAGpsInterface->init) {
 				origAGpsInterface->init(&aGpsCallbacks);
 			}
 			else {
@@ -621,7 +651,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 				char str[RPC_PAYLOAD_MAX] = {};
 				RPC_UNPACK_S(buf, idx, str);
 				
-				if (origAGpsInterface) {
+				if (origAGpsInterface && origAGpsInterface->data_conn_open) {
 					rc = origAGpsInterface->data_conn_open(str);
 				}
 				else {
@@ -632,7 +662,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			RPC_PACK(rbuf, ridx, rc);
 			break;
 		case GPS_PROXY_AGPS_DATA_CONN_CLOSED:
-			if (origAGpsInterface) {
+			if (origAGpsInterface && origAGpsInterface->data_conn_closed) {
 				rc = origAGpsInterface->data_conn_closed();
 			}
 			else {
@@ -642,7 +672,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			RPC_PACK(rbuf, ridx, rc);
 			break;
 		case GPS_PROXY_AGPS_DATA_CONN_FAILED:
-			if (origAGpsInterface) {
+			if (origAGpsInterface && origAGpsInterface->data_conn_failed) {
 				rc = origAGpsInterface->data_conn_failed();
 			}
 			else {
@@ -662,7 +692,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 				RPC_UNPACK_S(buf, idx, hostname);
 	
 		
-				if (origAGpsInterface) {
+				if (origAGpsInterface && origAGpsInterface->set_server) {
 					rc = origAGpsInterface->set_server(
 						type, hostname, port
 					);
@@ -675,7 +705,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			RPC_PACK(rbuf, ridx, rc);
 			break;
 		case GPS_PROXY_NI_INIT:
-			if (origNiInterface) {
+			if (origNiInterface && origNiInterface->init) {
 				origNiInterface->init(&gpsNiCallbacks);
 			}
 			else {
@@ -691,7 +721,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 				RPC_UNPACK(buf, idx, notif_id);
 				RPC_UNPACK(buf, idx, user_response);
 
-				if (origNiInterface) {
+				if (origNiInterface && origNiInterface->respond) {
 					origNiInterface->respond(notif_id,
 						user_response);
 				}
@@ -702,7 +732,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			}
 			break;
 		case GPS_PROXY_GPS_INIT:
-			if (origGpsInterface) {
+			if (origGpsInterface && origGpsInterface->init) {
 				RPC_DEBUG("calling GPS_INIT");
 				rc = origGpsInterface->init(&gpsCallbacks);
 				RPC_INFO("GPS_INIT rc %d", rc);
@@ -714,7 +744,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			RPC_PACK(rbuf, ridx, rc);
 			break;
 		case GPS_PROXY_GPS_START:
-			if (origGpsInterface) {
+			if (origGpsInterface && origGpsInterface->start) {
 				rc = origGpsInterface->start();
 			}
 			else {
@@ -724,7 +754,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			RPC_PACK(rbuf, ridx, rc);
 			break;
 		case GPS_PROXY_GPS_STOP:
-			if (origGpsInterface) {
+			if (origGpsInterface && origGpsInterface->stop) {
 				rc = origGpsInterface->stop();
 			}
 			else {
@@ -734,7 +764,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 			RPC_PACK(rbuf, ridx, rc);
 			break;
 		case GPS_PROXY_GPS_CLEANUP:
-			if (origGpsInterface) {
+			if (origGpsInterface && origGpsInterface->cleanup) {
 				origGpsInterface->cleanup();
 			}
 			else {
@@ -752,7 +782,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 				RPC_UNPACK(buf, idx, timeReference);
 				RPC_UNPACK(buf, idx, uncertainty);
 
-				if (origGpsInterface) {
+				if (origGpsInterface && origGpsInterface->inject_time) {
 					rc = origGpsInterface->inject_time(time, timeReference,
 						uncertainty);
 				}
@@ -773,7 +803,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 				RPC_UNPACK(buf, idx, longitude);
 				RPC_UNPACK(buf, idx, accuracy);
 				
-				if (origGpsInterface) {
+				if (origGpsInterface && origGpsInterface->inject_location) {
 					rc = origGpsInterface->inject_location(latitude, longitude,
 						accuracy);
 				}
@@ -789,7 +819,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 				GpsAidingData flags;
 				RPC_UNPACK(buf, idx, flags);
 				
-				if (origGpsInterface) {
+				if (origGpsInterface && origGpsInterface->delete_aiding_data) {
 					origGpsInterface->delete_aiding_data(flags);
 				}
 				else {
@@ -812,7 +842,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 				RPC_UNPACK(buf, idx, preferred_accuracy);
 				RPC_UNPACK(buf, idx, preferred_time);
 
-				if (origGpsInterface) {
+				if (origGpsInterface && origGpsInterface->set_position_mode) {
 					rc = origGpsInterface->set_position_mode(
 						mode, recurrence, min_interval,
 						preferred_accuracy, preferred_time
@@ -1035,6 +1065,9 @@ static int load_gps_library(void) {
 	setup_gps_interface();
 
 	RPC_INFO("loaded GPS library successfully");
+	
+	usleep(2000 * 1000);
+
 	return 0;
 
 fail:
