@@ -535,12 +535,13 @@ static void close_pipes(void) {
 static void gps_proxy_teardown(void) {
 	LOG_ENTRY;
 	if (gps_rpc) {
-		rpc_join(gps_rpc);
+		rpc_kill(gps_rpc);
 		rpc_free(gps_rpc);
 		gps_rpc = NULL;
 	}
 
 	CHECK_CLOSE(client_fd);
+	close_pipes();
 
 	pthread_kill(gps_cb_thread, SIGKILL);
 	pthread_kill(ni_cb_thread, SIGKILL);
@@ -553,8 +554,6 @@ static void gps_proxy_teardown(void) {
 	gpsCallbacks = NULL;
 	niCallbacks = NULL;
 	rilCallbacks = NULL;
-
-	close_pipes();
 
 	LOG_EXIT;
 }
@@ -1149,7 +1148,7 @@ static void gps_cleanup(void) {
 
 	LOG_ENTRY;
 	rpc_call(gps_rpc, &req);
-	//gps_proxy_teardown();
+	gps_proxy_teardown();
 	LOG_EXIT;
 }
 

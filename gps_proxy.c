@@ -766,6 +766,7 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 		case GPS_PROXY_GPS_CLEANUP:
 			if (origGpsInterface && origGpsInterface->cleanup) {
 				origGpsInterface->cleanup();
+				exit(-1);
 			}
 			else {
 				RPC_ERROR("origGpsInterface == NULL");
