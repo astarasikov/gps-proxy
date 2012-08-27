@@ -484,7 +484,7 @@ static int gps_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 
 fail:
 	LOG_EXIT;
-	return rc;
+	return 0;
 }
 
 static int rpc_call_result(rpc_t *rpc, rpc_request_t *req)
@@ -535,11 +535,15 @@ static void close_pipes(void) {
 static void gps_proxy_cleanup(void) {
 	LOG_ENTRY;
 
+	pthread_mutex_lock(&gps_mutex);
+
 	xtraCallbacks = NULL;
 	aGpsCallbacks = NULL;
 	gpsCallbacks = NULL;
 	niCallbacks = NULL;
 	rilCallbacks = NULL;
+
+	pthread_mutex_unlock(&gps_mutex);
 
 	LOG_EXIT;
 }
@@ -695,7 +699,10 @@ static int gps_xtra_init(GpsXtraCallbacks *callbacks) {
 		goto fail;
 	}
 	
+	pthread_mutex_lock(&gps_mutex);
 	xtraCallbacks = callbacks;
+	pthread_mutex_unlock(&gps_mutex);
+
 	struct rpc_request_t req = {
 		.header = {
 			.code = GPS_PROXY_XTRA_INIT,
@@ -754,7 +761,9 @@ static void agps_init(AGpsCallbacks *callbacks) {
 		RPC_ERROR("%s: callbacks is NULL", __func__);
 	}
 
+	pthread_mutex_lock(&gps_mutex);
 	aGpsCallbacks = callbacks;
+	pthread_mutex_unlock(&gps_mutex);
 	struct rpc_request_t req = {
 		.header = {
 			.code = GPS_PROXY_AGPS_INIT,
@@ -917,7 +926,9 @@ static void ril_init(AGpsRilCallbacks *callbacks) {
 		goto fail;
 	}
 
+	pthread_mutex_lock(&gps_mutex);
 	rilCallbacks = callbacks;
+	pthread_mutex_unlock(&gps_mutex);
 	
 	struct rpc_request_t req = {
 		.header = {
@@ -1092,7 +1103,9 @@ static int gps_init(GpsCallbacks *callbacks) {
 		goto fail;
 	}
 	
+	pthread_mutex_lock(&gps_mutex);
 	gpsCallbacks = callbacks;
+	pthread_mutex_unlock(&gps_mutex);
 	struct rpc_request_t req = {
 		.header = {
 			.code = GPS_PROXY_GPS_INIT,
