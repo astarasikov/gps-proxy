@@ -50,8 +50,18 @@ static GpsNiInterface *origNiInterface = NULL;
 static AGpsRilInterface *origRilInterface = NULL;
 
 /******************************************************************************
+ * Function prototypes
+ *****************************************************************************/
+static int load_gps_library(void);
+static void free_gps_library(void);
+
+/******************************************************************************
  * Outgoing RPC Interface
  *****************************************************************************/
+
+#define MAX_THREADS 10
+static pthread_t lib_threads[MAX_THREADS];
+static int num_lib_threads = 0;
 
 static pthread_t create_thread_cb(
 	const char *name,
@@ -68,17 +78,17 @@ static pthread_t create_thread_cb(
 		goto fail;
 	}
 
-	pthread_t *thread = NULL;
-	thread = malloc(sizeof(pthread_t));
-	if (!thread) {	
-		RPC_ERROR("out of memory for a new thread");
+	if (num_lib_threads >= MAX_THREADS) {
+		RPC_ERROR("%s: already created maximal number of threads", __func__);
 		goto fail;
 	}
-
-	pthread_create(thread, NULL, start, arg);
 	
+	int idx = num_lib_threads;
+	num_lib_threads++;
+	pthread_create(lib_threads + idx, NULL, start, arg);
+
 	LOG_EXIT;
-	return *thread;
+	return lib_threads[idx];
 
 fail:
 	return 0;
@@ -924,6 +934,8 @@ static int gps_server(void) {
 	int ret = -1;
 	int client_fd = -1;
 
+	LOG_ENTRY;
+
 	fd = server_socket_open();
 	if (fd < 0) {
 		RPC_ERROR("failed to open the socket");
@@ -940,41 +952,39 @@ static int gps_server(void) {
 		if (client_fd <= 0) {
 			RPC_ERROR("failed to accept the client");
 			goto fail;
-			//continue;
+		}
+	
+		if (load_gps_library()) {
+			RPC_ERROR("failed to load gps library and symbols");
+			goto done;
 		}
 
 		if (handle_rpc(client_fd)) {
 			RPC_ERROR("failed to serve the RPC client");
 		}
 
-		close(client_fd);
+done:
+		if (client_fd >= 0) { 
+			close(client_fd);
+		}
+
+		while (--num_lib_threads >= 0) {
+			pthread_kill(lib_threads[num_lib_threads], SIGKILL);
+		}
+
+		free_gps_library();
 //	}
 
 	ret = 0;
 
 fail:
-	if (client_fd >= 0) {
-		close(client_fd);
-	}
 
 	if (fd >= 0) {
 		close(fd);
 	}
 
+	LOG_EXIT;
 	return ret;
-}
-
-static int start_gps_server(void) {
-	int rc = -1;
-
-	if (gps_server()) {
-		RPC_ERROR("failed to handle GPS");
-		goto fail;
-	}
-	
-	rc = 0;
-fail:
-	return rc;
 }
 
 /******************************************************************************
@@ -1067,8 +1077,6 @@ static int load_gps_library(void) {
 
 	RPC_INFO("loaded GPS library successfully");
 	
-	usleep(2000 * 1000);
-
 	return 0;
 
 fail:
@@ -1076,6 +1084,7 @@ fail:
 
 	if (lib_handle) {
 		dlclose(lib_handle);
+		lib_handle = NULL;
 	}
 
 	return -1;
@@ -1084,25 +1093,18 @@ fail:
 static void free_gps_library(void) {
 	if (lib_handle) {
 		dlclose(lib_handle);
+		lib_handle = NULL;
 	}
 }
 
 int main(int argc, char** argv) {
 	int rc = 0;
-	if (load_gps_library()) {
-		RPC_ERROR("failed to load gps library and symbols");
-		rc = EXIT_FAILURE;
-		goto done;
-	}
-
-	if ((rc = start_gps_server()) < 0) {
+	
+	if ((rc = gps_server()) < 0) {
 		RPC_ERROR("failed to start gps proxy server, error code %d",
 			rc);
 	}
 	RPC_INFO("exiting");
-
-done:
-	free_gps_library();
 
 	return rc;
 }

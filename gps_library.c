@@ -1148,7 +1148,7 @@ static void gps_cleanup(void) {
 
 	LOG_ENTRY;
 	rpc_call(gps_rpc, &req);
-	gps_proxy_teardown();
+	//gps_proxy_teardown();
 	LOG_EXIT;
 }
 
