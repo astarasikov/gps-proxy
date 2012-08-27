@@ -55,6 +55,8 @@ static AGpsRilInterface *origRilInterface = NULL;
 static int load_gps_library(void);
 static void free_gps_library(void);
 
+static int gps_inited = 0;
+
 /******************************************************************************
  * Outgoing RPC Interface
  *****************************************************************************/
@@ -318,6 +320,11 @@ fail:
 
 static void gps_set_capabilities_cb(uint32_t capabilities) {
 	LOG_ENTRY;
+
+	if (!gps_inited) {
+		RPC_DEBUG("%s: not yet ready", __func__);
+		goto fail;
+	}
 
 	rpc_request_t req = {
 		.header = {
@@ -746,6 +753,8 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 				RPC_DEBUG("calling GPS_INIT");
 				rc = origGpsInterface->init(&gpsCallbacks);
 				RPC_INFO("GPS_INIT rc %d", rc);
+
+				gps_inited = 1;
 			}
 			else {
 				RPC_ERROR("origGpsInterface == NULL");
@@ -776,7 +785,8 @@ static int gps_srv_rpc_handler(rpc_request_hdr_t *hdr, rpc_reply_t *reply) {
 		case GPS_PROXY_GPS_CLEANUP:
 			if (origGpsInterface && origGpsInterface->cleanup) {
 				origGpsInterface->cleanup();
-				exit(-1);
+
+				gps_inited = 0;
 			}
 			else {
 				RPC_ERROR("origGpsInterface == NULL");
