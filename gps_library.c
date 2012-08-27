@@ -628,7 +628,9 @@ fail:
 	}
 
 done:
+	pthread_mutex_lock(&gps_mutex);
 	pthread_cond_broadcast(&gps_cond);
+	pthread_mutex_unlock(&gps_mutex);
 	LOG_EXIT;
 	return NULL;
 }
@@ -662,9 +664,9 @@ static int start_gps_client(void) {
 		goto fail;
 	}
 	
-	pthread_mutex_lock(&gps_mutex);
 	pthread_create(&gps_rpc_thread, NULL, gps_client, NULL);
-	pthread_cond_wait(&gps_cond, NULL);
+	pthread_mutex_lock(&gps_mutex);
+	pthread_cond_wait(&gps_cond, &gps_mutex);
 	pthread_mutex_unlock(&gps_mutex);
 
 	if (!gps_rpc) {
