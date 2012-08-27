@@ -532,22 +532,8 @@ static void close_pipes(void) {
 	CHECK_CLOSE(pipe_ril[WRITE_END]);
 }
 
-static void gps_proxy_teardown(void) {
+static void gps_proxy_cleanup(void) {
 	LOG_ENTRY;
-	if (gps_rpc) {
-		rpc_kill(gps_rpc);
-		rpc_free(gps_rpc);
-		gps_rpc = NULL;
-	}
-
-	CHECK_CLOSE(client_fd);
-	close_pipes();
-
-	pthread_kill(gps_cb_thread, SIGKILL);
-	pthread_kill(ni_cb_thread, SIGKILL);
-	pthread_kill(agps_cb_thread, SIGKILL);
-	pthread_kill(xtra_cb_thread, SIGKILL);
-	pthread_kill(ril_cb_thread, SIGKILL);
 
 	xtraCallbacks = NULL;
 	aGpsCallbacks = NULL;
@@ -559,6 +545,7 @@ static void gps_proxy_teardown(void) {
 }
 
 static int start_rpc(int fd) {
+	LOG_ENTRY;
 	struct rpc *rpc = NULL;
 	
 	rpc = rpc_alloc();
@@ -579,11 +566,13 @@ static int start_rpc(int fd) {
 
 	gps_rpc = rpc;
 
+	LOG_EXIT;
 	return 0;
 fail:
 	if (rpc) {
 		rpc_free(rpc);
 	}
+	LOG_EXIT;
 	return -1;
 }
 
@@ -673,8 +662,8 @@ static int start_gps_client(void) {
 		goto fail;
 	}
 	
-	pthread_create(&gps_rpc_thread, NULL, gps_client, NULL);
 	pthread_mutex_lock(&gps_mutex);
+	pthread_create(&gps_rpc_thread, NULL, gps_client, NULL);
 	pthread_cond_wait(&gps_cond, NULL);
 	pthread_mutex_unlock(&gps_mutex);
 
@@ -927,6 +916,7 @@ static void ril_init(AGpsRilCallbacks *callbacks) {
 	}
 
 	rilCallbacks = callbacks;
+	
 	struct rpc_request_t req = {
 		.header = {
 			.code = RIL_INIT,
@@ -1099,7 +1089,7 @@ static int gps_init(GpsCallbacks *callbacks) {
 		RPC_ERROR("%s: callbacks is NULL", __func__);
 		goto fail;
 	}
-
+	
 	gpsCallbacks = callbacks;
 	struct rpc_request_t req = {
 		.header = {
@@ -1148,7 +1138,7 @@ static void gps_cleanup(void) {
 
 	LOG_ENTRY;
 	rpc_call(gps_rpc, &req);
-	//gps_proxy_teardown();
+	gps_proxy_cleanup();
 	LOG_EXIT;
 }
 
